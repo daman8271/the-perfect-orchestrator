@@ -4,12 +4,15 @@
 
 <p align="center"><i>No orchestrator is perfect — this one just refuses to trust its own workers.</i></p>
 
+<p align="center"><b><a href="https://the-perfect-orchestrator.vercel.app">the-perfect-orchestrator.vercel.app</a></b> — the site (built and QA'd by its own fleet)</p>
+
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Made with Bash" src="https://img.shields.io/badge/made%20with-bash-1f425f.svg">
   <img alt="Requires tmux" src="https://img.shields.io/badge/requires-tmux-success">
   <a href="https://github.com/daman8271/the-perfect-orchestrator/actions"><img alt="CI" src="https://github.com/daman8271/the-perfect-orchestrator/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg">
+  <a href="https://the-perfect-orchestrator.vercel.app"><img alt="Website" src="https://img.shields.io/badge/website-live-e3b341"></a>
 </p>
 
 ---
