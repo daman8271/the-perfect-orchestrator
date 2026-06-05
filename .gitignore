@@ -1,0 +1,7 @@
+# runtime state (default lives in ~/.claude-armada, but never commit it from anywhere)
+runs/
+worker-config/
+*.log
+
+# OS noise
+.DS_Store

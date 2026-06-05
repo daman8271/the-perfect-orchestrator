@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+#
+# orch — The Perfect Orchestrator.
+# One lead Claude Code session commanding N autonomous Claude Code workers in tmux.
+# https://github.com/daman8271/the-perfect-orchestrator
+set -euo pipefail
+
+VERSION="0.1.0"
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+REPO_DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
+ORCH_HOME="${ORCH_HOME:-$HOME/.orch}"
+RUNS="$ORCH_HOME/runs"
+
+die() { echo "orch: $*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+orch — The Perfect Orchestrator
+One lead Claude Code session commanding N autonomous workers in tmux.
+
+USAGE
+  orch spawn  <session> <N> [workdir]      create tmux session orch-<session> with N
+                                           tiled Claude Code worker panes + a shared
+                                           workspace (bus.md, panes.txt). workdir
+                                           defaults to the current directory.
+  orch send   <session> <n> <message...>   type a SINGLE-LINE prompt into worker n
+  orch send   <session> <n> --file <path>  point worker n at a task-brief file
+  orch read   <session> <n> [lines]        capture worker n's pane (default 50 lines)
+  orch status [session]                    list all fleets, or show one fleet's
+                                           panes + done-flags + bus tail
+  orch kill   <session> | --all            tear down fleet(s)
+  orch doctor                              check dependencies + print the permission
+                                           rules the LEAD session needs
+  orch worker <workdir> [config_dir]       (internal) run one worker; used as the
+                                           tmux pane command by `orch spawn`
+
+STATE
+  Runtime state lives in $ORCH_HOME (default ~/.orch):
+    runs/<session>/panes.txt          ordered tmux pane ids (worker 1..N)
+    runs/<session>/shared/bus.md      append-only message bus
+    runs/<session>/shared/agent-<n>.task.md / .result.md / .done
+    worker-config/                    isolated CLAUDE_CONFIG_DIR for workers
+EOF
+}
+
+pane_for() { # <session> <num>  -> pane id on stdout
+  local f="$RUNS/$1/panes.txt" pane
+  [ -f "$f" ] || die "unknown session '$1' (no $f)"
+  pane=$(sed -n "${2}p" "$f")
+  [ -n "$pane" ] || die "no worker $2 in session '$1'"
+  echo "$pane"
+}
+
+cmd_spawn() {
+  local session="${1:?usage: orch spawn <session> <N> [workdir]}"
+  local n="${2:?need a worker count}"
+  local workdir="${3:-$PWD}"
+  [ -d "$workdir" ] || die "workdir '$workdir' does not exist"
+  workdir="$(cd "$workdir" && pwd)"
+  local ses="orch-$session" run="$RUNS/$session" shared="$RUNS/$session/shared"
+  local worker_cmd pid
+  worker_cmd=$(printf '%q worker %q' "$SELF" "$workdir")
+
+  mkdir -p "$shared"
+  : > "$shared/bus.md"          # fresh message bus
+  : > "$run/panes.txt"          # fresh pane map
+  tmux kill-session -t "$ses" 2>/dev/null || true
+
+  # First worker creates the session + window; -P -F prints its pane id.
+  pid=$(tmux new-session -d -s "$ses" -n workers -P -F '#{pane_id}' "$worker_cmd")
+  echo "$pid" >> "$run/panes.txt"
+
+  # Remaining workers as tiled splits.
+  for _ in $(seq 2 "$n"); do
+    pid=$(tmux split-window -t "$ses:workers" -P -F '#{pane_id}' "$worker_cmd")
+    echo "$pid" >> "$run/panes.txt"
+    tmux select-layout -t "$ses:workers" tiled >/dev/null
+  done
+  tmux select-layout -t "$ses:workers" tiled >/dev/null
+
+  echo "spawned $ses: $n workers | workdir=$workdir"
+  echo "shared workspace: $shared"
+  echo "panes:"
+  cat "$run/panes.txt"
+  echo "attach (read-only watching is safest):  tmux attach -t $ses"
+}
+
+cmd_send() {
+  local session="${1:?usage: orch send <session> <n> <message...>}"
+  local num="${2:?need a worker number}"
+  shift 2
+  local pane msg
+  pane=$(pane_for "$session" "$num")
+  if [ "${1:-}" = "--file" ]; then
+    local f="${2:?--file needs a path}"
+    [ -f "$f" ] || die "brief file '$f' not found"
+    msg="Read and follow the instructions in $f then begin. Work fully autonomously; do not wait for confirmation."
+  else
+    msg="$*"
+    [ -n "$msg" ] || die "empty message"
+    case "$msg" in
+      *$'\n'*) die "message must be single-line (newline submits in the TUI) — use --file for long briefs" ;;
+    esac
+  fi
+  # -l = literal (no key-name interpretation); Enter sent separately to submit.
+  tmux send-keys -t "$pane" -l -- "$msg"
+  tmux send-keys -t "$pane" Enter
+  echo "-> W$num ($pane): $msg"
+}
+
+cmd_read() {
+  local session="${1:?usage: orch read <session> <n> [lines]}"
+  local num="${2:?need a worker number}"
+  local lines="${3:-50}"
+  local pane
+  pane=$(pane_for "$session" "$num")
+  tmux capture-pane -p -t "$pane" -S "-$lines"
+}
+
+cmd_status() {
+  if [ -z "${1:-}" ]; then
+    tmux ls 2>/dev/null | grep '^orch-' || echo "(no orch sessions)"
+    return 0
+  fi
+  local session="$1" ses="orch-$1" shared="$RUNS/$1/shared"
+  echo "== $ses =="
+  tmux list-panes -t "$ses:workers" \
+    -F "W#{pane_index} #{pane_id} cmd=#{pane_current_command} #{pane_width}x#{pane_height}" \
+    2>/dev/null || echo "(session not found)"
+  echo "-- done flags --"
+  local found=0 f
+  for f in "$shared"/*.done; do
+    if [ -e "$f" ]; then
+      basename "$f"
+      found=1
+    fi
+  done
+  [ "$found" = 1 ] || echo "(none done yet)"
+  echo "-- bus tail --"
+  tail -n 15 "$shared/bus.md" 2>/dev/null || echo "(empty)"
+}
+
+cmd_kill() {
+  local target="${1:?usage: orch kill <session>|--all}"
+  if [ "$target" = "--all" ]; then
+    local s
+    for s in $(tmux ls 2>/dev/null | grep -oE '^orch-[^:]+'); do
+      tmux kill-session -t "$s" && echo "killed $s"
+    done
+    return 0
+  fi
+  tmux kill-session -t "orch-$target" 2>/dev/null \
+    && echo "killed orch-$target" \
+    || echo "no session orch-$target"
+}
+
+cmd_doctor() {
+  local ok=0
+  echo "The Perfect Orchestrator — doctor"
+  echo
+  if command -v tmux >/dev/null 2>&1; then
+    echo "  [ok] tmux: $(tmux -V)"
+  else
+    echo "  [MISSING] tmux — install it (apt install tmux / brew install tmux)"; ok=1
+  fi
+  if command -v claude >/dev/null 2>&1; then
+    echo "  [ok] claude: $(claude --version 2>/dev/null | head -1 || echo found)"
+  else
+    echo "  [MISSING] claude — install Claude Code: https://claude.com/claude-code"; ok=1
+  fi
+  if [ -f "$HOME/.claude/.credentials.json" ]; then
+    echo "  [ok] Claude credentials found (workers will share them)"
+  else
+    echo "  [warn] no ~/.claude/.credentials.json — log in to Claude Code once first"
+  fi
+  echo
+  echo "The LEAD session needs these allow-rules in ~/.claude/settings.local.json"
+  echo "(without them, the permission classifier may block autonomous spawns):"
+  cat <<'EOF'
+
+  {
+    "permissions": {
+      "allow": [
+        "Bash(orch:*)",
+        "Bash(tmux:*)"
+      ]
+    }
+  }
+EOF
+  return "$ok"
+}
+
+cmd_worker() {
+  # Launches ONE autonomous Claude Code worker, bound to an ISOLATED config dir so it:
+  #   * has none of your hooks        -> no notification spam on every worker turn
+  #   * uses a generous allowlist     -> does real work without permission prompts
+  #   * shares your live credentials  -> already authenticated (symlink follows rotation)
+  #   * inherits onboarding state     -> no first-run wizard to hang on
+  # Run as the command of a tmux pane; when claude exits, the pane ends.
+  local workdir="${1:-$PWD}"
+  local cfg="${2:-$ORCH_HOME/worker-config}"
+  mkdir -p "$cfg"
+  if [ ! -f "$cfg/settings.json" ] && [ -f "$REPO_DIR/config/worker-settings.json" ]; then
+    cp "$REPO_DIR/config/worker-settings.json" "$cfg/settings.json"
+  fi
+  if [ -f "$HOME/.claude/.credentials.json" ]; then
+    ln -sf "$HOME/.claude/.credentials.json" "$cfg/.credentials.json"
+  fi
+  if [ -f "$HOME/.claude.json" ] && [ ! -e "$cfg/.claude.json" ]; then
+    cp "$HOME/.claude.json" "$cfg/.claude.json"
+  fi
+  cd "$workdir"
+  export CLAUDE_CONFIG_DIR="$cfg"
+  export ORCH_WORKER=1
+  exec claude --add-dir "$workdir"
+}
+
+case "${1:-}" in
+  spawn|send|read|status|kill|doctor|worker)
+    cmd="$1"; shift
+    "cmd_$cmd" "$@"
+    ;;
+  -v|--version) echo "orch $VERSION" ;;
+  ""|-h|--help) usage ;;
+  *) die "unknown command '$1' (try: orch --help)" ;;
+esac

@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash syntax check
+        run: |
+          bash -n bin/orch
+          bash -n install.sh
+      - name: shellcheck
+        run: |
+          shellcheck bin/orch
+          shellcheck install.sh
+      - name: json validity
+        run: |
+          python3 -m json.tool config/worker-settings.json > /dev/null
