@@ -1,6 +1,7 @@
-<h1 align="center">The Perfect Orchestrator</h1>
+<p align="center">
+  <img src="assets/hero.png" alt="The Perfect Orchestrator — one lead Claude, N autonomous workers, verified results" width="100%">
+</p>
 
-<p align="center"><b>One lead Claude. N autonomous Claude Code workers. Adversarially verified results.</b></p>
 <p align="center"><i>No orchestrator is perfect — this one just refuses to trust its own workers.</i></p>
 
 <p align="center">
@@ -46,6 +47,10 @@ In real use this has repeatedly caught not just worker mistakes — but the lead
 wrong assumptions.
 
 ## How it works
+
+<p align="center">
+  <img src="assets/verification.png" alt="One lead node fans out to eight worker terminals — seven VERIFIED, one REFUTED" width="85%">
+</p>
 
 ```mermaid
 graph TB
