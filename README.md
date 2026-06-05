@@ -118,7 +118,7 @@ orch kill  audit                     # tear down
 
 | command | what it does |
 |---|---|
-| `orch spawn <session> <N> [workdir]` | tmux session `orch-<session>` with N tiled worker panes + shared workspace (`bus.md`, briefs, results, done-flags) |
+| `orch spawn <session> <N> [workdir]` | tmux session `orch-<session>` with N tiled worker panes + a shared workspace (`bus.md` + pane map at spawn; briefs, results, and done-flags land there as the fleet works) |
 | `orch send <session> <n> <msg>` | type a single-line prompt into worker *n* (newline submits — use `--file` for briefs) |
 | `orch send <session> <n> --file <path>` | point worker *n* at a task-brief file |
 | `orch read <session> <n> [lines]` | capture worker *n*'s pane — see what it's doing, catch stalls |
