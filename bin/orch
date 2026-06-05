@@ -78,6 +78,15 @@ cmd_spawn() {
   done
   tmux select-layout -t "$ses:workers" tiled >/dev/null
 
+  # First-run trust prompts (new workdirs) block booting workers — clear them once
+  # the TUIs are up. A bare Enter on an already-ready prompt is harmless.
+  (
+    sleep 9
+    while IFS= read -r p; do
+      tmux send-keys -t "$p" Enter 2>/dev/null || true
+    done < "$run/panes.txt"
+  ) &
+
   echo "spawned $ses: $n workers | workdir=$workdir"
   echo "shared workspace: $shared"
   echo "panes:"
@@ -206,8 +215,16 @@ cmd_worker() {
   if [ -f "$HOME/.claude/.credentials.json" ]; then
     ln -sf "$HOME/.claude/.credentials.json" "$cfg/.credentials.json"
   fi
-  if [ -f "$HOME/.claude.json" ] && [ ! -e "$cfg/.claude.json" ]; then
-    cp "$HOME/.claude.json" "$cfg/.claude.json"
+  # Plugin passthrough: user-scope plugins/marketplaces work inside isolated workers.
+  if [ -d "$HOME/.claude/plugins" ] && [ ! -e "$cfg/plugins" ]; then
+    ln -s "$HOME/.claude/plugins" "$cfg/plugins"
+  fi
+  # Seed or refresh onboarding state (trust grants, plugin registry). Never overwrite
+  # a config the workers have since made newer themselves.
+  if [ -f "$HOME/.claude.json" ]; then
+    if [ ! -e "$cfg/.claude.json" ] || [ "$HOME/.claude.json" -nt "$cfg/.claude.json" ]; then
+      cp "$HOME/.claude.json" "$cfg/.claude.json" 2>/dev/null || true
+    fi
   fi
   cd "$workdir"
   export CLAUDE_CONFIG_DIR="$cfg"
