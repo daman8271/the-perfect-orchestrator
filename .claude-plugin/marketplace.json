@@ -1,0 +1,32 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "the-perfect-orchestrator",
+  "description": "One lead Claude, N autonomous tmux workers, adversarially verified results",
+  "version": "0.1.0",
+  "owner": {
+    "name": "danny",
+    "url": "https://github.com/daman8271"
+  },
+  "plugins": [
+    {
+      "name": "orchestrator",
+      "description": "The /orch skill — turn your Claude Code session into the LEAD of a fleet: spawn N autonomous tmux workers, brief them, monitor them, and adversarially verify their results. Pairs with the orch CLI (install via the repo's install.sh).",
+      "version": "0.1.0",
+      "source": "./plugins/orchestrator",
+      "category": "productivity",
+      "homepage": "https://github.com/daman8271/the-perfect-orchestrator",
+      "author": {
+        "name": "danny",
+        "url": "https://github.com/daman8271"
+      },
+      "tags": [
+        "orchestration",
+        "multi-agent",
+        "tmux",
+        "fleet",
+        "verification",
+        "parallel"
+      ]
+    }
+  ]
+}

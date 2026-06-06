@@ -2,6 +2,12 @@
   <img src="assets/hero.png" alt="The Perfect Orchestrator — one lead Claude, N autonomous workers, verified results" width="100%">
 </p>
 
+<p align="center">
+  <img src="assets/demo.gif" alt="A real fleet run: the lead spawns 3 workers, findings flow over the bus, and the run ends 17 CONFIRMED / 0 REFUTED" width="100%">
+</p>
+
+<p align="center"><i>a real fleet run — recorded, not rendered (raw transcript in <a href="docs/realrun-2026-06-06/">docs/realrun-2026-06-06/</a>)</i></p>
+
 <p align="center"><i>No orchestrator is perfect — this one just refuses to trust its own workers.</i></p>
 
 <p align="center"><b><a href="https://the-perfect-orchestrator.vercel.app">the-perfect-orchestrator.vercel.app</a></b> — the site (built and QA'd by its own fleet)</p>
@@ -88,12 +94,26 @@ coordinate via `bus.md` (append lines prefixed `[Wn]`, read it to see peers); wh
 finished write `agent-<n>.result.md` then `touch agent-<n>.done`; work autonomously,
 never wait.*
 
-## Quickstart
+## Install in 10 seconds
+
+```bash
+claude plugin marketplace add daman8271/the-perfect-orchestrator
+claude plugin install orchestrator@the-perfect-orchestrator
+```
+
+That gives your Claude Code session the **/orch skill** — the lead playbook. The
+plugin ships the skill only; the `orch` CLI itself installs via the classic path:
 
 ```bash
 git clone https://github.com/daman8271/the-perfect-orchestrator
 cd the-perfect-orchestrator
-./install.sh        # installs the `orch` CLI + the /orch Claude Code skill
+./install.sh        # installs the `orch` CLI (+ the same skill, if you skipped the plugin)
+```
+
+## Quickstart
+
+```bash
+./install.sh        # if you haven't yet — installs the `orch` CLI + the /orch skill
 orch doctor         # verify setup + get the allow-rules for your lead session
 ```
 
